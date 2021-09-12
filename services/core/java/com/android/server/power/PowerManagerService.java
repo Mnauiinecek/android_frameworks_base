@@ -106,6 +106,7 @@ import android.provider.Settings;
 import android.provider.Settings.SettingNotFoundException;
 import android.service.dreams.DreamManagerInternal;
 import android.sysprop.PowerProperties;
+import android.system.Os;
 import android.telephony.TelephonyManager;
 import android.util.ArrayMap;
 import android.util.IntArray;
@@ -152,6 +153,7 @@ import com.android.server.power.feature.PowerManagerFlags;
 import dalvik.annotation.optimization.NeverCompile;
 
 import lineageos.providers.LineageSettings;
+import lineageos.waydroid.Hardware;
 
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
@@ -165,6 +167,8 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.concurrent.Executor;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * The power manager service is responsible for coordinating power management
@@ -348,6 +352,8 @@ public final class PowerManagerService extends SystemService
     // True if battery saver is supported on this device.
     private final boolean mBatterySaverSupported;
 
+    private Hardware mWaydroidHardware;
+    private boolean mWaydroidSuspendDefault;
     private final PowerManagerFlags mFeatureFlags;
 
     private boolean mDisableScreenWakeLocksWhileCached;
@@ -1264,6 +1270,17 @@ public final class PowerManagerService extends SystemService
         mKeyboardBrightnessDefault = mContext.getResources().getFloat(
                 org.lineageos.platform.internal.R.dimen
                         .config_keyboardBrightnessSettingDefaultFloat);
+
+        mWaydroidHardware = Hardware.getInstance(context);
+        try {
+            Matcher kernel_ver = Pattern.compile("(\\d+)\\.(\\d+)").matcher(Os.uname().release);
+            kernel_ver.find();
+            int kernel_maj = Integer.parseInt(kernel_ver.group(1));
+            int kernel_min = Integer.parseInt(kernel_ver.group(2));
+            mWaydroidSuspendDefault = kernel_maj > 4 || (kernel_maj == 4 && kernel_min >= 9);
+        } catch (Exception e) {
+            mWaydroidSuspendDefault = false;
+        }
 
         // Save brightness values:
         // Get float values from config.
@@ -2247,10 +2264,10 @@ public final class PowerManagerService extends SystemService
                     + ", flags=0x" + Integer.toHexString(flags) + ", uid=" + uid);
         }
 
-        if (eventTime < powerGroup.getLastSleepTimeLocked()
+        /*if (eventTime < powerGroup.getLastSleepTimeLocked()
                 || eventTime < powerGroup.getLastWakeTimeLocked() || !mSystemReady) {
             return false;
-        }
+        }*/
 
         Trace.traceBegin(Trace.TRACE_TAG_POWER, "userActivity");
         try {
@@ -3535,8 +3552,17 @@ public final class PowerManagerService extends SystemService
                 changed = dreamPowerGroupLocked(powerGroup, time,
                         Process.SYSTEM_UID, /* allowWake= */ false);
             } else {
-                changed = dozePowerGroupLocked(powerGroup, time,
-                        PowerManager.GO_TO_SLEEP_REASON_TIMEOUT, Process.SYSTEM_UID);
+                //changed = dozePowerGroupLocked(powerGroup, time,
+                //        PowerManager.GO_TO_SLEEP_REASON_TIMEOUT, Process.SYSTEM_UID);
+                final boolean suspend = SystemProperties.getBoolean("persist.waydroid.suspend", mWaydroidSuspendDefault);
+                final boolean no_open_wins = SystemProperties.get("waydroid.open_windows", "-1").equals("0");
+                if (mWaydroidHardware != null && suspend && no_open_wins && ((dirty & DIRTY_WAKE_LOCKS) == 0)) {
+                    wakePowerGroupLocked(powerGroup, SystemClock.uptimeMillis(),
+                        PowerManager.WAKE_REASON_UNKNOWN,
+                        "android.server.power:DREAM_FINISHED", Process.SYSTEM_UID,
+                        mContext.getOpPackageName(), Process.SYSTEM_UID);
+                    mWaydroidHardware.suspend();
+                }
             }
         }
         return changed;
