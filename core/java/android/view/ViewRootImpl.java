@@ -202,6 +202,7 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.Message;
 import android.os.ParcelFileDescriptor;
+import android.os.PatternMatcher;
 import android.os.Process;
 import android.os.RemoteException;
 import android.os.ServiceManager;
@@ -301,6 +302,7 @@ import java.io.StringWriter;
 import java.lang.ref.WeakReference;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -659,6 +661,7 @@ public final class ViewRootImpl implements ViewParent,
     final Choreographer mChoreographer;
     protected final ViewFrameInfo mViewFrameInfo = new ViewFrameInfo();
     private final InputEventAssigner mInputEventAssigner = new InputEventAssigner();
+    final boolean mFakeClickAsTouch;
 
     // Whether to draw this surface as DISPLAY_DECORATION.
     boolean mDisplayDecorationCached = false;
@@ -1343,7 +1346,17 @@ public final class ViewRootImpl implements ViewParent,
                 com.android.server.display.feature.flags.Flags.subscribeGranularDisplayEvents();
 
         mSendPerfHintOnTouch = adpfViewrootimplActionDownBoost();
-    }
+
+        String packageName = context.getPackageName();
+        mFakeClickAsTouch = Arrays.stream(SystemProperties.get("persist.waydroid.fake_touch").split(","))
+            .map(x -> x.replace(".", "\\."))
+            .map(x -> x.replace("*", ".*"))
+            .map(x -> new PatternMatcher(x, PatternMatcher.PATTERN_SIMPLE_GLOB))
+            .anyMatch(p -> p.match(packageName));
+
+        if (mFakeClickAsTouch)
+            Log.d(TAG, "Faking touch inputs for " + packageName);
+}
 
     public static void addFirstDrawHandler(Runnable callback) {
         synchronized (sFirstDrawHandlers) {
@@ -10366,6 +10379,14 @@ public final class ViewRootImpl implements ViewParent,
     private void deliverInputEvent(QueuedInputEvent q) {
         Trace.asyncTraceBegin(Trace.TRACE_TAG_VIEW, "deliverInputEvent",
                 q.mEvent.getId());
+
+        if (mFakeClickAsTouch && q.mEvent instanceof MotionEvent) {
+            MotionEvent ev = (MotionEvent) q.mEvent;
+            int action = ev.getAction();
+            if (action == MotionEvent.ACTION_MOVE || action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_UP) {
+                ev.setSource(4098);
+            }
+        }
 
         if (Trace.isTagEnabled(Trace.TRACE_TAG_VIEW)) {
             Trace.traceBegin(Trace.TRACE_TAG_VIEW, "deliverInputEvent src=0x"
