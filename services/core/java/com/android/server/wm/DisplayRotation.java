@@ -434,7 +434,8 @@ public class DisplayRotation {
         mDefaultFixedToUserRotation =
                 (isCar || isTv || mService.mIsPc
                         || mDisplayContent.isPublicSecondaryDisplayWithDesktopModeForceEnabled()
-                        || !mDisplayContent.shouldRotateWithContent())
+                        || !mDisplayContent.shouldRotateWithContent() ||
+                 SystemProperties.getBoolean("waydroid.stub_sensors_hal", false))
                 // For debug purposes the next line turns this feature off with:
                 // $ adb shell setprop config.override_forced_orient true
                 // $ adb shell wm size reset
