@@ -390,7 +390,8 @@ final class PackageAbiHelperImpl implements PackageAbiHelper {
                 // 2. cpuAbiOverride is null. If it is non-null, it is set via shell for testing
                 final boolean forceMatch = Flags.forceMultiArchNativeLibsMatch()
                         && pkg.getTargetSdkVersion() >= Build.VERSION_CODES.VANILLA_ICE_CREAM
-                        && cpuAbiOverride == null;
+                        && cpuAbiOverride == null
+                        && !pkg.getPackageName().equals("com.google.android.gms");
 
                 String[] supported32BitAbis = forceMatch ? getNativelySupported32BitAbis()
                         : Build.SUPPORTED_32_BIT_ABIS;
