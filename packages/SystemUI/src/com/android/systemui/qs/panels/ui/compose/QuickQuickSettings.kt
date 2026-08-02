@@ -36,6 +36,9 @@ import com.android.systemui.qs.panels.ui.viewmodel.BounceableTileViewModel
 import com.android.systemui.qs.panels.ui.viewmodel.QuickQuickSettingsViewModel
 import com.android.systemui.qs.shared.ui.QuickSettings.Elements.toElementKey
 import com.android.systemui.res.R
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
+import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults
 
 @Composable
 fun ContentScope.QuickQuickSettings(
@@ -48,6 +51,7 @@ fun ContentScope.QuickQuickSettings(
     val tiles = sizedTiles.fastMap { it.tile }
     val squishiness by viewModel.squishinessViewModel.squishiness.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
+    val useModifiedSpacing = true
 
     Box(modifier = modifier) {
         GridAnchor()
@@ -82,10 +86,19 @@ fun ContentScope.QuickQuickSettings(
             val spans by remember(sizedTiles) { derivedStateOf { sizedTiles.fastMap { it.width } } }
             VerticalSpannedGrid(
                 columns = columns,
-                columnSpacing = dimensionResource(R.dimen.qs_tile_margin_horizontal),
-                rowSpacing = dimensionResource(R.dimen.qs_tile_margin_vertical),
+                columnSpacing = if (useModifiedSpacing) {
+                    CommonTileDefaults.TileColumnSpacing
+                } else {
+                    dimensionResource(R.dimen.qs_tile_margin_horizontal)
+                },
+                rowSpacing = if (useModifiedSpacing) {
+                    CommonTileDefaults.TileRowSpacing
+                } else {
+                    dimensionResource(R.dimen.qs_tile_margin_vertical)
+                },
                 spans = spans,
-                modifier = Modifier.sysuiResTag("qqs_tile_layout"),
+                modifier = Modifier.sysuiResTag("qqs_tile_layout")
+                    .then(if (useModifiedSpacing) Modifier.padding(horizontal = 10.dp) else Modifier),
                 keys = { sizedTiles[it].tile.spec },
             ) { spanIndex, column, isFirstInColumn, isLastInColumn ->
                 val it = sizedTiles[spanIndex]
