@@ -54,6 +54,8 @@ import com.android.systemui.res.R
 import com.android.systemui.shade.shared.flag.DualShadeFlag
 import javax.inject.Inject
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 
 @SysUISingleton
 class InfiniteGridLayout
@@ -96,17 +98,28 @@ constructor(
             }
         val squishiness by viewModel.squishinessViewModel.squishiness.collectAsStateWithLifecycle()
         val scope = rememberCoroutineScope()
+        val useModifiedSpacing = true
 
         val bounceables =
             remember(sizedTiles) { List(sizedTiles.size) { BounceableTileViewModel() } }
         val spans by remember(sizedTiles) { derivedStateOf { sizedTiles.fastMap { it.width } } }
         VerticalSpannedGrid(
             columns = columns,
-            columnSpacing = dimensionResource(R.dimen.qs_tile_margin_horizontal),
-            rowSpacing = dimensionResource(R.dimen.qs_tile_margin_vertical),
+            columnSpacing = if (useModifiedSpacing) {
+                CommonTileDefaults.TileColumnSpacing
+            } else {
+                dimensionResource(R.dimen.qs_tile_margin_horizontal)
+            },
+            rowSpacing = if (useModifiedSpacing) {
+                CommonTileDefaults.TileRowSpacing
+            } else {
+                dimensionResource(R.dimen.qs_tile_margin_vertical)
+            },
             spans = spans,
             keys = { sizedTiles[it].tile.spec },
-            modifier = modifier,
+            modifier = modifier.then(
+                if (useModifiedSpacing) Modifier.padding(horizontal = 10.dp) else Modifier
+            ),
         ) { spanIndex, column, isFirstInColumn, isLastInColumn ->
             val it = sizedTiles[spanIndex]
 
