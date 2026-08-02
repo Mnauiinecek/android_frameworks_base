@@ -505,12 +505,12 @@ object CommonTileDefaults {
     private val largeIconSize: Dp
         @Composable
         @ReadOnlyComposable
-        get() = dimensionResource(id = R.dimen.common_tile_default_large_tile_icon_size)
+        get() = 24.dp
 
     private val smallIconSize: Dp
         @Composable
         @ReadOnlyComposable
-        get() = dimensionResource(id = R.dimen.common_tile_default_icon_size)
+        get() = 24.dp
 }
 
 /** Same as Image, but it doesn't clip its content. */
