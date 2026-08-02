@@ -497,25 +497,51 @@ private object TileDefaults {
     /** An active tile with dual target only show the active color on the icon */
     @Composable
     @ReadOnlyComposable
-    fun activeDualTargetTileColors(): TileColors =
-        TileColors(
-            background = LocalAndroidColorScheme.current.surfaceEffect1,
-            iconBackground = MaterialTheme.colorScheme.primary,
-            label = MaterialTheme.colorScheme.onSurface,
-            secondaryLabel = MaterialTheme.colorScheme.onSurface,
-            icon = MaterialTheme.colorScheme.onPrimary,
-        )
+    fun activeDualTargetTileColors(): TileColors {
+        val useSingleTone = true
+
+        return if (useSingleTone) {
+            TileColors(
+                background = MaterialTheme.colorScheme.primary,
+                iconBackground = Color.Transparent,
+                label = MaterialTheme.colorScheme.onPrimary,
+                secondaryLabel = MaterialTheme.colorScheme.onPrimary,
+                icon = MaterialTheme.colorScheme.onPrimary,
+            )
+        } else {
+            TileColors(
+                background = LocalAndroidColorScheme.current.surfaceEffect1,
+                iconBackground = MaterialTheme.colorScheme.primary,
+                label = MaterialTheme.colorScheme.onSurface,
+                secondaryLabel = MaterialTheme.colorScheme.onSurface,
+                icon = MaterialTheme.colorScheme.onPrimary,
+            )
+        }
+    }
 
     @Composable
     @ReadOnlyComposable
-    fun inactiveDualTargetTileColors(): TileColors =
-        TileColors(
-            background = LocalAndroidColorScheme.current.surfaceEffect1,
-            iconBackground = LocalAndroidColorScheme.current.surfaceEffect2,
-            label = MaterialTheme.colorScheme.onSurface,
-            secondaryLabel = MaterialTheme.colorScheme.onSurface,
-            icon = MaterialTheme.colorScheme.onSurface,
-        )
+    fun inactiveDualTargetTileColors(): TileColors {
+        val useSingleTone = true
+
+        return if (useSingleTone) {
+            TileColors(
+                background = LocalAndroidColorScheme.current.surfaceEffect1,
+                iconBackground = Color.Transparent,
+                label = MaterialTheme.colorScheme.onSurface,
+                secondaryLabel = MaterialTheme.colorScheme.onSurface,
+                icon = MaterialTheme.colorScheme.onSurface,
+            )
+        } else {
+            TileColors(
+                background = LocalAndroidColorScheme.current.surfaceEffect1,
+                iconBackground = LocalAndroidColorScheme.current.surfaceEffect2,
+                label = MaterialTheme.colorScheme.onSurface,
+                secondaryLabel = MaterialTheme.colorScheme.onSurface,
+                icon = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+    }
 
     @Composable
     @ReadOnlyComposable
