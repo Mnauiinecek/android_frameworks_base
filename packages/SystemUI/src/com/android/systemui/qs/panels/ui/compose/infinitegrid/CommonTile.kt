@@ -489,6 +489,8 @@ object CommonTileDefaults {
     val ChevronSize = 14.dp
     val TileEndPadding = 12.dp
     val TileArrangementPadding = 6.dp
+    val TileColumnSpacing = 20.dp
+    val TileRowSpacing = 20.dp
     val TileLabelBlurWidth = 32.dp
     const val TILE_MARQUEE_ITERATIONS = 1
     const val TILE_INITIAL_DELAY_MILLIS = 2000
