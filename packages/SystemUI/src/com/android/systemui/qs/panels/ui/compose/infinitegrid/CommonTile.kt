@@ -411,8 +411,8 @@ object TileBounceMotionTestKeys {
 }
 
 object CommonTileDefaults {
-    val IconSize = 32.dp
-    val LargeTileIconSize = 28.dp
+    val IconSize = 24.dp
+    val LargeTileIconSize = 24.dp
     val SideIconWidth = 32.dp
     val SideIconHeight = 20.dp
     val ChevronSize = 14.dp
