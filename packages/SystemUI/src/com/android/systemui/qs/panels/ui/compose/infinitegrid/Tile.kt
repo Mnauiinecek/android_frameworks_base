@@ -20,7 +20,10 @@ package com.android.systemui.qs.panels.ui.compose.infinitegrid
 
 import android.content.Context
 import android.content.res.Resources
+import android.database.ContentObserver
 import android.os.Trace
+import android.os.UserHandle
+import android.provider.Settings
 import android.service.quicksettings.Tile.STATE_ACTIVE
 import android.service.quicksettings.Tile.STATE_INACTIVE
 import android.service.quicksettings.Tile.STATE_UNAVAILABLE
@@ -47,9 +50,12 @@ import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -58,11 +64,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -106,6 +115,7 @@ import com.android.systemui.qs.pipeline.shared.TileSpec
 import com.android.systemui.qs.tileimpl.QSTileImpl
 import com.android.systemui.qs.ui.composable.QuickSettingsShade
 import com.android.systemui.qs.ui.compose.borderOnFocus
+import com.android.systemui.qs.tiles.impl.ringer.QSTileRingerSlider
 import com.android.systemui.res.R
 import kotlinx.coroutines.CoroutineScope
 
@@ -195,6 +205,11 @@ fun ContentScope.Tile(
             rememberViewModel(traceName = "TileHapticsViewModel") {
                 tileHapticsViewModelFactoryProvider.getHapticsViewModelFactory()?.create(tile)
             }
+
+        if (tile.spec.spec == "sound" && !iconOnly) {
+            QSTileRingerSlider()
+            return@trace
+        }
 
         // TODO(b/361789146): Draw the shapes instead of clipping
         val tileShape by TileDefaults.animateTileShapeAsState(uiState.state)
@@ -478,6 +493,126 @@ data class TileColors(
     val icon: Color,
 )
 
+@Composable
+fun rememberTileShapeMode(): Int {
+    val context = LocalContext.current
+    val contentResolver = context.contentResolver
+
+    fun readShapeMode(): Int {
+        return try {
+            Settings.System.getIntForUser(
+                contentResolver, "0", 0,
+                UserHandle.USER_CURRENT
+            )
+        } catch (_: Throwable) {
+            0
+        }
+    }
+
+    var shapeMode by remember { mutableIntStateOf(readShapeMode()) }
+
+    DisposableEffect(contentResolver) {
+        val observer = object : ContentObserver(null) {
+            override fun onChange(selfChange: Boolean) {
+                context.mainExecutor.execute {
+                    shapeMode = readShapeMode()
+                }
+            }
+        }
+
+        contentResolver.registerContentObserver(
+            Settings.System.getUriFor("0"),
+            false, observer, UserHandle.USER_ALL
+        )
+
+        onDispose {
+            contentResolver.unregisterContentObserver(observer)
+        }
+    }
+
+    return shapeMode
+}
+
+@Composable
+fun rememberTileHaptic(): Boolean {
+    val context = LocalContext.current
+    val contentResolver = context.contentResolver
+
+    fun readHapticEnabled(): Boolean {
+        return try {
+            Settings.System.getIntForUser(
+                contentResolver, "true", 1,
+                UserHandle.USER_CURRENT
+            ) != 0
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    var hapticEnabled by remember { mutableStateOf(readHapticEnabled()) }
+
+    DisposableEffect(contentResolver) {
+        val observer = object : ContentObserver(null) {
+            override fun onChange(selfChange: Boolean) {
+                context.mainExecutor.execute {
+                    hapticEnabled = readHapticEnabled()
+                }
+            }
+        }
+
+        contentResolver.registerContentObserver(
+            Settings.System.getUriFor("true"),
+            false, observer, UserHandle.USER_ALL
+        )
+
+        onDispose {
+            contentResolver.unregisterContentObserver(observer)
+        }
+    }
+
+    return hapticEnabled
+}
+
+@Composable
+fun rememberQsGradient(): Boolean {
+    val context = LocalContext.current
+    val contentResolver = context.contentResolver
+
+    fun readEnabled(): Boolean {
+        return try {
+            Settings.System.getIntForUser(
+                contentResolver, "0", 0,
+                UserHandle.USER_CURRENT
+            ) != 0
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    var enabled by remember { mutableStateOf(readEnabled()) }
+
+    DisposableEffect(contentResolver) {
+        val observer = object : ContentObserver(null) {
+            override fun onChange(selfChange: Boolean) {
+                enabled = readEnabled()
+            }
+        }
+        contentResolver.registerContentObserver(
+            Settings.System.getUriFor("0"),
+            false, observer, UserHandle.USER_ALL
+        )
+        onDispose { contentResolver.unregisterContentObserver(observer) }
+    }
+
+    return enabled
+}
+
+@Composable
+    internal fun rememberQsTileBackgroundBrush(): Brush? {
+        val enabled = rememberQsGradient()
+        return TileDefaults.qsTileBackgroundBrush(enabled)
+    }
+
 private object TileDefaults {
     val ActiveIconCornerRadius = 16.dp
     val ActiveTileCornerRadius = 24.dp
@@ -636,6 +771,30 @@ private object TileDefaults {
                 }
             mutableStateOf(RoundedCornerShape(corner))
         }
+    }
+
+    @Composable
+    fun qsTileBackgroundBrush(enabled: Boolean): Brush? {
+        if (!enabled) return null
+
+        val mode = 0
+        val colors = if (mode == 1) {
+            listOf(
+                MaterialTheme.colorScheme.primary,
+                MaterialTheme.colorScheme.secondary
+            )
+        } else {
+            listOf(
+                MaterialTheme.colorScheme.primary,
+                MaterialTheme.colorScheme.secondary
+            )
+        }
+
+        return Brush.linearGradient(
+            colors = colors,
+            start = Offset(0f, 0f),
+            end = Offset.Infinite
+        )
     }
 }
 

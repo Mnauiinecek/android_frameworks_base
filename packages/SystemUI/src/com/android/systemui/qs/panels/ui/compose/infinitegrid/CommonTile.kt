@@ -425,6 +425,7 @@ object CommonTileDefaults {
     val TileColumnSpacing = 20.dp
     val TileRowSpacing = 20.dp
     val InactiveCornerRadius = 50.dp
+    val ActiveTileCornerRadius = 24.dp
     val TileLabelBlurWidth = 32.dp
     const val TILE_MARQUEE_ITERATIONS = 1
     const val TILE_INITIAL_DELAY_MILLIS = 2000
