@@ -1,0 +1,283 @@
+/*
+ * Copyright (C) 2025 AxionOS
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package com.android.systemui.common.ringer
+
+import android.media.AudioManager
+import android.service.quicksettings.Tile.STATE_ACTIVE
+import android.service.quicksettings.Tile.STATE_INACTIVE
+import android.view.HapticFeedbackConstants
+
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.*
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.*
+import androidx.compose.foundation.gestures.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.*
+import androidx.compose.ui.graphics.*
+import androidx.compose.ui.input.pointer.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
+
+import com.android.systemui.qs.panels.ui.compose.infinitegrid.rememberQSTileAnimationStyle
+import com.android.systemui.qs.panels.ui.compose.infinitegrid.rememberTileHaptic
+import com.android.systemui.qs.panels.ui.compose.infinitegrid.tileToggleAnimation
+
+import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+@Composable
+fun RingerSliderWidget(
+    interactor: RingerModeInteractor,
+    theme: RingerSliderTheme,
+    dimens: RingerSliderDimens,
+    modifier: Modifier = Modifier,
+    isDozing: Boolean = false,
+    border: Modifier = Modifier,
+    containerShape: Shape = RoundedCornerShape(24.dp),
+    thumbShape: Shape = RoundedCornerShape(16.dp),
+    onLongClick: (() -> Unit)? = null
+) {
+    val availableModes = interactor.getAvailableRingerModes()
+    val numModes = interactor.getNumberOfModes()
+    val maxOffset = interactor.getMaxOffset()
+    val view = LocalView.current
+    val coroutineScope = rememberCoroutineScope()
+    val hapticEnabled = rememberTileHaptic()
+    val animationStyle = rememberQSTileAnimationStyle()
+    var toggleAnimState by remember { mutableIntStateOf(STATE_INACTIVE) }
+    var lastSnappedMode by remember { mutableIntStateOf(interactor.getCurrentMode()) }
+    val isDndEnabled by interactor.dndMode.collectAsState(initial = interactor.isDndEnabled())
+    
+    val targetPosition by interactor.targetPositionFlow.collectAsState(
+        initial = interactor.getTargetPosition(interactor.getCurrentMode())
+    )
+
+    var dragOffset by remember { mutableStateOf(targetPosition) }
+    var isDragging by remember { mutableStateOf(false) }
+
+    LaunchedEffect(toggleAnimState) {
+        if (toggleAnimState == STATE_ACTIVE) {
+            delay(16L)
+            toggleAnimState = STATE_INACTIVE
+        }
+    }
+
+    fun commitMode(newMode: Int) {
+        interactor.setRingerMode(newMode)
+        if (newMode != lastSnappedMode) {
+            lastSnappedMode = newMode
+            toggleAnimState = STATE_ACTIVE
+            if (hapticEnabled) {
+                coroutineScope.launch {
+                    when (newMode) {
+                        AudioManager.RINGER_MODE_VIBRATE -> {
+                            view.performHapticFeedback(
+                                HapticFeedbackConstants.CLOCK_TICK,
+                                HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING,
+                            )
+                            delay(80L)
+                            view.performHapticFeedback(
+                                HapticFeedbackConstants.CLOCK_TICK,
+                                HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING,
+                            )
+                        }
+                        else -> {
+                            view.performHapticFeedback(
+                                HapticFeedbackConstants.CLOCK_TICK,
+                                HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    val animatedPosition by animateFloatAsState(
+        targetValue = if (isDragging) dragOffset else targetPosition,
+        animationSpec = tween(
+            durationMillis = 250,
+            easing = LinearOutSlowInEasing
+        ),
+        label = "ringer_position"
+    )
+
+    LaunchedEffect(targetPosition) {
+        if (!isDragging) dragOffset = targetPosition
+    }
+
+    val interactionSource = remember { MutableInteractionSource() }
+
+    Box(
+        modifier = modifier
+            .height(dimens.thumbSize)
+            .background(
+                when {
+                    isDozing -> Color.Transparent
+                    isDndEnabled -> theme.dndBg
+                    else -> theme.neutralBg
+                },
+                containerShape
+            )
+            .clip(containerShape)
+            .then(
+                if (isDozing)
+                    Modifier.border(theme.dozeStroke, Color.White, containerShape)
+                else border
+            )
+.pointerInput(Unit) {
+    detectTapGestures(
+        onTap = { tapOffset ->
+            if (isDndEnabled) return@detectTapGestures
+
+            val sectionWidth = size.width / numModes.coerceAtLeast(1).toFloat()
+            val snappedIndex = (tapOffset.x / sectionWidth).toInt().coerceIn(0, numModes - 1)
+
+            dragOffset = snappedIndex.toFloat()
+
+            commitMode(availableModes[snappedIndex].mode)
+        },
+        onLongPress = {
+            onLongClick?.invoke()
+        }
+    )
+}
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDragStart = { isDragging = true },
+                    onDragEnd = {
+                        isDragging = false
+                        if (isDndEnabled) return@detectDragGestures
+
+                        commitMode(interactor.snapMode(dragOffset))
+                    },
+                    onDragCancel = { 
+                        isDragging = false
+                    }
+                ) { change, dragAmount ->
+                    if (isDndEnabled) {
+                        change.consume()
+                        return@detectDragGestures
+                    }
+                    change.consume()
+                    val trackWidth = size.width - dimens.thumbSize.toPx()
+                    val pixelPerUnit = trackWidth / maxOffset
+                    dragOffset = (dragOffset + (dragAmount.x / pixelPerUnit))
+                        .coerceIn(0f, maxOffset)
+                }
+            },
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            val currentIndex = animatedPosition.roundToInt()
+            availableModes.forEachIndexed { index, _ ->
+                val dotAlpha by animateFloatAsState(
+                    targetValue = if (isDndEnabled) 0f else if (currentIndex == index) 0f else 0.4f,
+                    animationSpec = tween(durationMillis = 200),
+                    label = "dot_alpha"
+                )
+                Box(
+                    modifier = Modifier
+                        .size(dimens.dotSize)
+                        .graphicsLayer { alpha = dotAlpha }
+                        .background(
+                            if (isDozing) Color.White else if (isDndEnabled) theme.dndIcon else theme.neutralIcon,
+                            RoundedCornerShape(50)
+                        )
+                )
+            }
+        }
+
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val totalWidth = maxWidth
+            val step = if (numModes > 1) (totalWidth - dimens.thumbSize) / (numModes - 1) else 0.dp
+            val thumbOffset = if (isDndEnabled) {
+                (totalWidth - dimens.thumbSize) / 2f
+            } else {
+                step * animatedPosition
+            }
+            
+            Box(
+                modifier = Modifier
+                    .offset(x = thumbOffset)
+                    .tileToggleAnimation(
+                        animationStyle = animationStyle,
+                        state = toggleAnimState,
+                    )
+                    .size(dimens.thumbSize)
+                    .padding(dimens.thumbPadding)
+                    .background(
+                        when {
+                            isDozing -> Color.Transparent
+                            isDndEnabled -> theme.dndBg
+                            else -> Color.Transparent
+                        },
+                        thumbShape
+                    )
+                    .then(
+                        if (!isDozing && !isDndEnabled) {
+                            val brush = theme.activeBgBrush
+                            if (brush != null) {
+                                Modifier.background(brush, thumbShape)
+                            } else {
+                                Modifier.background(theme.activeBg, thumbShape)
+                            }
+                        } else Modifier
+                    )
+                    .then(
+                        when {
+                            isDozing ->
+                            Modifier.border(theme.dozeStroke, Color.White, thumbShape)
+                            isDndEnabled ->
+                                Modifier.border(2.dp, theme.dndBg, thumbShape)
+                            else ->
+                                Modifier.border(2.dp, theme.activeBgBrush ?: SolidColor(theme.activeBg), thumbShape)
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                val currentIndex = animatedPosition.roundToInt().coerceIn(0, numModes - 1)
+                Icon(
+                    imageVector = when {
+                        isDndEnabled -> Icons.Filled.DoNotDisturb
+                        else -> availableModes[currentIndex].icon
+                    },
+                    contentDescription = null,
+                    tint = when {
+                        isDozing -> Color.White
+                        isDndEnabled -> theme.dndIcon
+                        else -> theme.activeIcon
+                    },
+                    modifier = Modifier.size(dimens.iconSize)
+                )
+            }
+        }
+    }
+}
