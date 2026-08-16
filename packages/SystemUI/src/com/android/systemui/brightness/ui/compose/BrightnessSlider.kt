@@ -130,6 +130,16 @@ import com.android.systemui.utils.PolicyRestriction
 import lineageos.providers.LineageSettings
 import platform.test.motion.compose.values.MotionTestValueKey
 import platform.test.motion.compose.values.motionTestValues
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.updateTransition
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import com.android.compose.PlatformSlider
+import com.android.compose.PlatformSliderDefaults
+import com.android.systemui.qs.panels.ui.compose.infinitegrid.CustomColorScheme
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -241,6 +251,94 @@ fun BrightnessSlider(
         onDispose {
             cr.unregisterContentObserver(observer)
         }
+    }
+
+    val useMinimalSlider = true
+
+    if (useMinimalSlider) {
+        val axIconRes = if (autoMode) R.drawable.ic_qs_brightness_auto_on else iconRes
+        val axIconSize = 56.dp
+        val iconTapScope = rememberCoroutineScope()
+        val sliderColors = PlatformSliderDefaults.defaultPlatformSliderColors().copy(
+            trackColor = CustomColorScheme.current.qsTileColor,
+        )
+
+        val axIconTransition = updateTransition(targetState = axIconRes, label = "AxIconTransition")
+        val axIconScale by axIconTransition.animateFloat(
+            transitionSpec = { IconSwapScaleSpec },
+            label = "AxIconScale",
+        ) { targetIcon -> if (targetIcon == axIconRes) 1f else 0.85f }
+
+        Box(modifier = modifier) {
+            PlatformSlider(
+                value = animatedValue,
+                onValueChange = {
+                    if (enabled && !overriddenByAppState) {
+                        hapticsViewModel.onValueChange(it)
+                        value = it.toInt()
+                        onDrag(value)
+                    }
+                },
+                onValueChangeFinished = {
+                    if (enabled && !overriddenByAppState) {
+                        hapticsViewModel.onValueChangeEnded()
+                        onStop(value)
+                    }
+                },
+                valueRange = floatValueRange,
+                enabled = enabled,
+                interactionSource = interactionSource,
+                colors = sliderColors,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(axIconSize)
+                    .sysuiResTag("slider")
+                    .semantics(mergeDescendants = true) {
+                        this.text = AnnotatedString(contentDescription)
+                    }
+                    .sliderPercentage {
+                        (value - valueRange.first).toFloat() / (valueRange.last - valueRange.first)
+                    }
+                    .thenIf(isRestricted) {
+                        Modifier.clickable {
+                            if (restriction is PolicyRestriction.Restricted) {
+                                onRestrictedClick(restriction)
+                            }
+                        }
+                    },
+                icon = { _ ->
+                    Icon(
+                        painter = painterResource(axIconRes),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(24.dp)
+                            .graphicsLayer(scaleX = axIconScale, scaleY = axIconScale),
+                    )
+                },
+            )
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .size(axIconSize)
+                    .clip(CircleShape)
+                    .pointerInput(Unit) {
+                        detectTapGestures {
+                            iconTapScope.launch { onIconClick() }
+                        }
+                    }
+            )
+        }
+
+        val currentShowToast by rememberUpdatedState(showToast)
+        LaunchedEffect(interactionSource, overriddenByAppState) {
+            interactionSource.interactions.collect { interaction ->
+                if (interaction is DragInteraction.Start && overriddenByAppState) {
+                    currentShowToast()
+                }
+            }
+        }
+        return
     }
 
     Row(
@@ -604,6 +702,11 @@ private object AnimationSpecs {
     val IconAppearSpec = tween<Float>(durationMillis = 100, delayMillis = 33)
     val IconDisappearSpec = tween<Float>(durationMillis = 50)
 }
+
+private val IconSwapScaleSpec = spring<Float>(
+    dampingRatio = Spring.DampingRatioMediumBouncy,
+    stiffness = Spring.StiffnessHigh,
+)
 
 private suspend fun Animatable<Float, AnimationVector1D>.appear() =
     animateTo(targetValue = 1f, animationSpec = IconAppearSpec)
