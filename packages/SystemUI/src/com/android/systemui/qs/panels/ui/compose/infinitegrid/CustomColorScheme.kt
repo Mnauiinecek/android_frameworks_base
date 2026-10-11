@@ -41,9 +41,9 @@ class CustomColorScheme(private val context: Context) {
 
             val colorRes = if (blurEnabled) {
                 if (useAlternateColor)
-                    com.android.internal.R.color.surface_effect_2
+                    com.android.internal.R.color.customColorSurfaceEffect2
                 else
-                    com.android.internal.R.color.surface_effect_1
+                    com.android.internal.R.color.customColorSurfaceEffect1
             } else {
                 com.android.internal.R.color.materialColorSurfaceBright
             }
