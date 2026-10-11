@@ -435,6 +435,11 @@ object CommonTileDefaults {
         @ReadOnlyComposable
         get() = dimensionResource(id = R.dimen.common_tile_default_inactive_tile_corner_radius)
 
+    val InactiveCornerRadius: Dp
+        @Composable
+        @ReadOnlyComposable
+        get() = dimensionResource(id = R.dimen.common_tile_default_inactive_tile_corner_radius)
+
     /** Dimensions for focus rings with wide corners */
     val TileDetailsEntryWideCornerRadius: Dp
         @Composable
